@@ -71,12 +71,12 @@ jobs:
           oranda build
 
       - name: Copy config/config.yaml to /tmp/public/config/config.yaml
-        run: mkdir /tmp/public/config && cp config/config.yaml /tmp/public/config/config.yaml
+        run: mkdir -p /tmp/public/config && cp config/config.yaml /tmp/public/config/config.yaml
 
       - name: Prepare HTML for link checking
         # untitaker/hyperlink supports no site prefixes, move entire site into
         # a subfolder
-        run: mkdir /tmp/public/ && cp -R public /tmp/public/
+        run: mkdir -p /tmp/public/ && cp -R public /tmp/public/
 
       - name: Check HTML for broken internal links
         uses: untitaker/hyperlink@0.1.29
