@@ -1,6 +1,6 @@
 [package]
 name = "rcssl"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 repository = "https://github.com/auser/rcssl"
 description = "A Rust library for generating X.509 certificates with support for CA, server, client and peer certificate profiles."
