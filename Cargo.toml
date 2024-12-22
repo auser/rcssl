@@ -5,6 +5,13 @@ edition = "2024"
 repository = "https://github.com/auser/rcssl"
 description = "A Rust library for generating X.509 certificates with support for CA, server, client and peer certificate profiles."
 readme = "README.md"
+authors = ["Ari Lerner <me@ari.io>"]
+
+[package.metadata.wix]
+upgrade-guid = "9BFF5DCC-413C-42BA-BBCA-C1D20BCF1189"
+path-guid = "5174A5FB-9796-40DE-BFE0-1B6C6F027052"
+license = false
+eula = false
 
 [[bin]]
 name = "rcssl"
