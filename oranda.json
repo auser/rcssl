@@ -1,0 +1,23 @@
+{
+  "build": {
+    "path_prefix": "rcssl"
+  },
+  "styles": {
+    "theme": "axodark"
+  },
+  "components": {
+    "changelog": true,
+    "artifacts": {
+      "package_managers": {
+        "preferred": {},
+        "additional": {
+          "cargo": "cargo install rcssl",
+          "homebrew": "brew install rcssl",
+          "binstall": "cargo binstall rcssl",
+          "macos/linux/unix": "curl -L https://raw.githubusercontent.com/auser/rcssl/main/install.sh | bash",
+          "windows": "Start-BitsTransfer -Source https://raw.githubusercontent.com/auser/rcssl/main/install.ps1 -Destination $env:TMP/install_rcssl.ps1; Unblock-File $env:TMP/install_rcssl.ps1; Invoke-Expression $env:TMP/install_rcssl.ps1"
+        }
+      }
+    }
+  }
+}
