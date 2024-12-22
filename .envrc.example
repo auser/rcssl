@@ -1,0 +1,3 @@
+export CERT_OUTPUT_DIR=./certs
+export CERT_BASE_DIR=./certs
+export CERT_CONFIG_FILE=./config/config.yaml

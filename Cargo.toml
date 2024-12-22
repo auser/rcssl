@@ -3,13 +3,50 @@ name = "rcssl"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "rcssl"
+path = "bin/main.rs"
+
+[lib]
+name = "rcssl"
+path = "src/lib.rs"
+
 [dependencies]
 bytes = { version = "1.9.0", features = ["serde"] }
+chrono = { version = "0.4.39", optional = true }
+clap = { version = "4.5.23", optional = true, features = ["derive", "env"] }
+color-eyre = { version = "0.6.3", optional = true }
+lazy_static = { version = "1.5.0", optional = true }
 openssl = "0.10.68"
 rcgen = { version = "0.13.1", features = ["pem", "x509-parser", "crypto"] }
 serde = { version = "1.0.216", features = ["derive"] }
+serde_json = { version = "1.0.133", optional = true }
+serde_yaml = { version = "0.9.34", optional = true }
 thiserror = "2.0.8"
 time = "0.3.37"
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "sync", "macros"] }
+
+# Tracing
+tracing = { version = "0.1.40", optional = true }
+tracing-appender = { version = "0.2.3", optional = true }
+tracing-subscriber = { version = "0.3.18", optional = true, features = [
+  "env-filter",
+  "time",
+] }
 
 [dev-dependencies]
 tempfile = "3.14.0"
+
+[features]
+default = ["cli"]
+cli = [
+  "dep:clap",
+  "dep:lazy_static",
+  "dep:color-eyre",
+  "dep:tracing",
+  "dep:tracing-appender",
+  "dep:tracing-subscriber",
+  "dep:serde_json",
+  "dep:serde_yaml",
+  "dep:chrono",
+]

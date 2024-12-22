@@ -1,24 +1,26 @@
 use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, IsCa, KeyPair,
-    KeyUsagePurpose, PKCS_ECDSA_P256_SHA256,
+    KeyUsagePurpose,
 };
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use time::Duration;
 
 use crate::error::CertGenError;
+use crate::util::get_algorithm;
 
 pub type CertGenResult<T> = Result<T, CertGenError>;
 
 #[derive(Debug, Clone)]
 pub struct CertificateOptions {
     pub profile: CertificateProfile,
-    pub common_name: String,
+    pub domain: String,
     pub name: String,
+    pub common_name: Option<String>,
     pub hosts: Vec<String>,
     pub output_dir: PathBuf,
     pub base_dir: PathBuf,
-    pub domain: String,
     pub city: String,
     pub state: String,
     pub country: String,
@@ -26,9 +28,10 @@ pub struct CertificateOptions {
     pub organizational_unit: Option<String>,
     pub validity_days: i64,
     pub is_ca: bool,
+    pub algorithm: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CertificateProfile {
     Server,
     Client,
@@ -40,7 +43,7 @@ impl Default for CertificateOptions {
     fn default() -> Self {
         Self {
             profile: CertificateProfile::Server,
-            common_name: "traefik".to_string(),
+            common_name: Some("traefik".to_string()),
             name: "traefik".to_string(),
             hosts: vec!["localhost".to_string(), "traefik".to_string()],
             output_dir: PathBuf::from("./config/tls"),
@@ -53,6 +56,125 @@ impl Default for CertificateOptions {
             organizational_unit: Some("CA".to_string()),
             validity_days: 365,
             is_ca: false,
+            algorithm: "ECDSA_P256_SHA256".to_string(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct CertificateOptionsBuilder {
+    profile: Option<CertificateProfile>,
+    common_name: Option<String>,
+    name: Option<String>,
+    hosts: Option<Vec<String>>,
+    output_dir: Option<PathBuf>,
+    base_dir: Option<PathBuf>,
+    domain: Option<String>,
+    city: Option<String>,
+    state: Option<String>,
+    country: Option<String>,
+    organization: Option<String>,
+    organizational_unit: Option<Option<String>>,
+    validity_days: Option<i64>,
+    is_ca: Option<bool>,
+    algorithm: Option<String>,
+}
+
+impl CertificateOptionsBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn profile(mut self, profile: CertificateProfile) -> Self {
+        self.profile = Some(profile);
+        self
+    }
+
+    pub fn common_name(mut self, common_name: &str) -> Self {
+        self.common_name = Some(common_name.to_string());
+        self
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = Some(name.to_string());
+        self
+    }
+
+    pub fn hosts(mut self, hosts: Vec<&str>) -> Self {
+        self.hosts = Some(hosts.iter().map(|s| s.to_string()).collect());
+        self
+    }
+
+    pub fn output_dir(mut self, output_dir: PathBuf) -> Self {
+        self.output_dir = Some(output_dir);
+        self
+    }
+
+    pub fn base_dir(mut self, base_dir: PathBuf) -> Self {
+        self.base_dir = Some(base_dir);
+        self
+    }
+
+    pub fn domain(mut self, domain: &str) -> Self {
+        self.domain = Some(domain.to_string());
+        self
+    }
+
+    pub fn city(mut self, city: &str) -> Self {
+        self.city = Some(city.to_string());
+        self
+    }
+
+    pub fn state(mut self, state: &str) -> Self {
+        self.state = Some(state.to_string());
+        self
+    }
+
+    pub fn country(mut self, country: &str) -> Self {
+        self.country = Some(country.to_string());
+        self
+    }
+
+    pub fn organization(mut self, organization: &str) -> Self {
+        self.organization = Some(organization.to_string());
+        self
+    }
+
+    pub fn organizational_unit(mut self, organizational_unit: Option<&str>) -> Self {
+        self.organizational_unit = Some(organizational_unit.map(|s| s.to_string()));
+        self
+    }
+
+    pub fn validity_days(mut self, validity_days: i64) -> Self {
+        self.validity_days = Some(validity_days);
+        self
+    }
+
+    pub fn is_ca(mut self, is_ca: bool) -> Self {
+        self.is_ca = Some(is_ca);
+        self
+    }
+
+    pub fn build(self) -> CertificateOptions {
+        let default = CertificateOptions::default();
+        CertificateOptions {
+            profile: self.profile.unwrap_or(default.profile),
+            common_name: self.common_name.clone(),
+            name: self.name.unwrap_or(default.name),
+            hosts: self.hosts.unwrap_or(default.hosts),
+            output_dir: self.output_dir.unwrap_or(default.output_dir),
+            base_dir: self.base_dir.unwrap_or(default.base_dir),
+            domain: self.domain.unwrap_or(default.domain),
+            city: self.city.unwrap_or(default.city),
+            state: self.state.unwrap_or(default.state),
+            country: self.country.unwrap_or(default.country),
+            organization: self.organization.unwrap_or(default.organization),
+            organizational_unit: self
+                .organizational_unit
+                .unwrap_or(default.organizational_unit),
+            validity_days: self.validity_days.unwrap_or(default.validity_days),
+            is_ca: self.is_ca.unwrap_or(default.is_ca),
+            algorithm: self.algorithm.unwrap_or(default.algorithm),
         }
     }
 }
@@ -76,10 +198,17 @@ impl CertificateGenerator {
         Ok(())
     }
 
+    pub fn clean_certs(&self) -> CertGenResult<()> {
+        fs::remove_dir_all(&self.ca_options.base_dir)?;
+        Ok(())
+    }
+
     pub fn generate_ca(&self) -> CertGenResult<Option<(String, String)>> {
         self.ensure_directory_exists(&self.ca_options.base_dir)?;
 
-        let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)?;
+        let algorithm = get_algorithm(&self.ca_options.algorithm);
+
+        let key_pair = KeyPair::generate_for(algorithm)?;
         let ca_cert_path = self.ca_options.base_dir.join("ca.pem");
         let ca_key_path = self.ca_options.base_dir.join("ca-key.pem");
 
@@ -108,7 +237,13 @@ impl CertificateGenerator {
 
     fn create_distinguished_name(options: &CertificateOptions) -> DistinguishedName {
         let mut dn = DistinguishedName::new();
-        dn.push(DnType::CommonName, &options.common_name);
+        dn.push(
+            DnType::CommonName,
+            &options
+                .common_name
+                .clone()
+                .unwrap_or_else(|| options.name.clone()),
+        );
         dn.push(DnType::CountryName, &options.country);
         dn.push(DnType::StateOrProvinceName, &options.state);
         dn.push(DnType::LocalityName, &options.city);
@@ -167,26 +302,31 @@ impl CertificateGenerator {
     pub fn generate_cert(&self, options: &CertificateOptions) -> CertGenResult<()> {
         self.ensure_directory_exists(&options.output_dir)?;
 
-        let (_ca_cert_pem, ca_key_pem) = self
+        let (ca_cert_pem, ca_key_pem) = self
             .ca_cert_pem
             .as_ref()
             .ok_or_else(|| CertGenError::GenerationError("CA certificate not generated".into()))?;
 
-        // Create CA certificate from PEM
-        // let ca_params = CertificateParams::from_ca_cert_pem(ca_cert_pem)?;
-        let key_pair = KeyPair::from_pem(ca_key_pem)?;
-        // let ca_cert = ca_params.self_signed(&key_pair)?;
+        // Parse CA certificate and key
+        let ca_params = CertificateParams::from_ca_cert_pem(ca_cert_pem)?;
+        let ca_key_pair = KeyPair::from_pem(ca_key_pem)?;
+        let _ca_cert = ca_params.self_signed(&ca_key_pair)?;
 
-        // Generate service certificate
-        // let params = self.create_cert_params(options, None)?;
-        // let cert = params.self_signed(&key_pair)?;
+        // Generate new key pair for service certificate
+        let algorithm = get_algorithm(&options.algorithm);
+        let service_key_pair = KeyPair::generate_for(algorithm)?;
 
+        // Generate service certificate parameters
+        let service_params = self.create_cert_params(options)?;
+        let service_cert = service_params.self_signed(&service_key_pair)?;
+
+        std::fs::create_dir_all(&options.output_dir)?;
         let cert_path = options.output_dir.join(format!("{}.pem", options.name));
         let key_path = options.output_dir.join(format!("{}-key.pem", options.name));
 
-        // Sign the certificate with the CA
-        let cert_pem = key_pair.serialize_pem();
-        let key_pem = key_pair.serialize_der();
+        // Sign the certificate with the CA and write files
+        let cert_pem = service_cert.pem();
+        let key_pem = service_key_pair.serialize_pem();
 
         fs::write(cert_path, cert_pem)?;
         fs::write(key_path, key_pem)?;
@@ -199,8 +339,8 @@ impl CertificateGenerator {
         services: Vec<CertificateOptions>,
     ) -> CertGenResult<()> {
         // Generate CA and store its result
-        if let Some(ca_certs) = self.generate_ca()? {
-            self.ca_cert_pem = Some(ca_certs);
+        if let Some((ca_certs, ca_key)) = self.generate_ca()? {
+            self.ca_cert_pem = Some((ca_certs, ca_key));
 
             // Now generate service certificates
             for service_options in services {
@@ -230,7 +370,7 @@ impl CertificateGenerator {
             CertificateProfile::Server => {
                 options.profile = cert_profile;
                 options.name = name.to_string();
-                options.common_name = name.to_string();
+                options.common_name = Some(name.to_string());
                 self.generate_cert(&options)?;
             }
             CertificateProfile::Peer => {
@@ -270,7 +410,7 @@ mod tests {
     fn create_test_options(temp_dir: &TempDir) -> CertificateOptions {
         CertificateOptions {
             profile: CertificateProfile::Server,
-            common_name: "test-service".to_string(),
+            common_name: Some("test-service".to_string()),
             name: "test-service".to_string(),
             hosts: vec!["localhost".to_string(), "test-service".to_string()],
             output_dir: PathBuf::from(temp_dir.path()),
@@ -283,6 +423,7 @@ mod tests {
             organizational_unit: Some("Test Unit".to_string()),
             validity_days: 365,
             is_ca: false,
+            algorithm: "ECDSA_P256_SHA256".to_string(),
         }
     }
 

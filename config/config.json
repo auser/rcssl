@@ -1,0 +1,44 @@
+{
+  "ca": {
+    "common_name": "Root CA",
+    "country": "US",
+    "state": "California",
+    "city": "San Francisco",
+    "organization": "My Organization",
+    "organizational_unit": "IT",
+    "validity_days": 3650,
+    "hosts": [
+      "localhost",
+      "ca.local"
+    ]
+  },
+  "services": [
+    {
+      "name": "traefik",
+      "profile": "server",
+      "common_name": "traefik.local",
+      "hosts": [
+        "localhost",
+        "traefik.local",
+        "*.traefik.local"
+      ]
+    },
+    {
+      "name": "etcd",
+      "profile": "peer",
+      "hosts": [
+        "localhost",
+        "etcd.local",
+        "*.etcd.local"
+      ]
+    },
+    {
+      "name": "prometheus",
+      "profile": "client",
+      "hosts": [
+        "localhost",
+        "prometheus.local"
+      ]
+    }
+  ]
+}

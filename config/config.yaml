@@ -1,0 +1,43 @@
+ca:
+  domain: herringbank.com
+  common_name: "herringbank.com"
+  country: "US"
+  state: "California"
+  city: "San Francisco"
+  organization: "Herring Bank"
+  organizational_unit: "IT"
+  validity_days: 3650
+  hosts:
+    - "localhost"
+    - "ca.local"
+    - "*.herringbank.com"
+    - "herringbank.com"
+
+services:
+  - name: "traefik"
+    profile: "server"
+    common_name: "traefik.local"
+    hosts:
+      - "localhost"
+      - "traefik.local"
+      - "*.traefik.local"
+
+  - name: "etcd"
+    profile: "server"
+    hosts:
+      - "localhost"
+      - "etcd.local"
+      - "*.etcd.local"
+
+  - name: "etcd-peer"
+    profile: "peer"
+    hosts:
+      - "localhost"
+      - "etcd.local"
+      - "*.etcd.local"
+
+  - name: "prometheus"
+    profile: "client"
+    hosts:
+      - "localhost"
+      - "prometheus.local"

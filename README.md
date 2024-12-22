@@ -19,5 +19,5 @@ A Rust library for generating X.509 certificates with support for CA, server, cl
 ## Usage
 
 ```rust
-
+rcssl generate --config ./config.yaml
 ```
