@@ -1,6 +1,6 @@
 ca:
-  domain: herringbank.com
-  common_name: "herringbank.com"
+  domain: ari.io
+  common_name: "ari.io"
   country: "US"
   state: "California"
   city: "San Francisco"
@@ -10,8 +10,8 @@ ca:
   hosts:
     - "localhost"
     - "ca.local"
-    - "*.herringbank.com"
-    - "herringbank.com"
+    - "*.ari.io"
+    - "ari.io"
 
 services:
   - name: "traefik"
