@@ -21,3 +21,11 @@ A Rust library for generating X.509 certificates with support for CA, server, cl
 ```rust
 rcssl generate --config ./config.yaml
 ```
+
+To see all the options, run `rcssl generate --help`.
+
+## Configuration
+
+The configuration file is a YAML file that defines the certificates to be generated.
+
+See the [config.yaml](./config/config.yaml) file for an example.
