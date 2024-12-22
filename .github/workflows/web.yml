@@ -75,6 +75,9 @@ jobs:
         # a subfolder
         run: mkdir /tmp/public/ && cp -R public /tmp
 
+      - name: Copy config/config.yaml to /tmp/public/config.yaml
+        run: cp config/config.yaml /tmp/public/config.yaml
+
       - name: Check HTML for broken internal links
         uses: untitaker/hyperlink@0.1.29
         with:
