@@ -7,9 +7,9 @@ use crate::cert::{
 };
 
 use super::{
-    Cli,
     config::{Config, ServiceConfig},
     error::RCSSLResult,
+    Cli,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
@@ -96,7 +96,6 @@ fn build_service_configuration_options(
 
     let ca_hosts = ca_options.hosts.clone();
     hosts.extend(ca_hosts);
-    println!("hosts: {:#?}", hosts);
     let hosts = hosts.iter().map(|s| s.as_str()).collect();
 
     let output_dir = cli
