@@ -1,0 +1,43 @@
+ca:
+  domain: ari.io
+  common_name: "ari.io"
+  country: "US"
+  state: "California"
+  city: "San Francisco"
+  organization: "Herring Bank"
+  organizational_unit: "IT"
+  validity_days: 3650
+  hosts:
+    - "localhost"
+    - "ca.local"
+    - "*.ari.io"
+    - "ari.io"
+
+services:
+  - name: "traefik"
+    profile: "server"
+    common_name: "traefik.local"
+    hosts:
+      - "localhost"
+      - "traefik.local"
+      - "*.traefik.local"
+
+  - name: "etcd"
+    profile: "server"
+    hosts:
+      - "localhost"
+      - "etcd.local"
+      - "*.etcd.local"
+
+  - name: "etcd-peer"
+    profile: "peer"
+    hosts:
+      - "localhost"
+      - "etcd.local"
+      - "*.etcd.local"
+
+  - name: "prometheus"
+    profile: "client"
+    hosts:
+      - "localhost"
+      - "prometheus.local"
