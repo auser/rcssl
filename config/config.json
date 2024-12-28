@@ -1,6 +1,7 @@
 {
   "ca": {
     "common_name": "Root CA",
+    "domain": "ca.local",
     "country": "US",
     "state": "California",
     "city": "San Francisco",

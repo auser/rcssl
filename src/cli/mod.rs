@@ -1,5 +1,5 @@
 use ::tracing::{debug, instrument};
-use clap::{Parser, Subcommand, command};
+use clap::{command, Parser, Subcommand};
 use config::Config;
 use error::{RCSSLError, RCSSLResult};
 use std::path::PathBuf;
@@ -114,7 +114,29 @@ fn parse_config(config_file: PathBuf) -> RCSSLResult<Config> {
 
     match extension {
         "json" => Ok(serde_json::from_str(&config_str)?),
-        "yaml" => Ok(serde_yaml::from_str(&config_str)?),
+        "yaml" | "yml" => Ok(serde_yaml::from_str(&config_str)?),
         _ => Err(RCSSLError::UnsupportedFileExtension(extension.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_accepts_yaml_config() {
+        let config_file = PathBuf::from("config/config.yaml");
+        parse_config(config_file).unwrap();
+    }
+    #[test]
+    fn test_accepts_yml_config() {
+        let config_file = PathBuf::from("config/config.yml");
+        parse_config(config_file).unwrap();
+    }
+
+    #[test]
+    fn test_accepts_json_config() {
+        let config_file = PathBuf::from("config/config.json");
+        parse_config(config_file).unwrap();
     }
 }
