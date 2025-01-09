@@ -23,7 +23,7 @@ use tracing::init_tracing;
 
 use crate::cert_kp::CertificateKeyPair;
 
-#[derive(Debug, Parser, Clone)]
+#[derive(Debug, Parser, Clone, Default)]
 #[command(author = AUTHOR, about = ABOUT, long_about = None, name = NAME)]
 #[command(version = &**VERSION)]
 pub struct Cli {
@@ -36,21 +36,21 @@ pub struct Cli {
     pub log_level: String,
 
     /// The output directory for the certificates
-    #[arg(long, short, default_value = "./certs", env = "CERT_OUTPUT_DIR")]
+    #[arg(
+        long,
+        short,
+        default_value = "./certs",
+        env = "CERT_OUTPUT_DIR",
+        global = true
+    )]
     pub output_dir: Option<PathBuf>,
 
-    /// The base directory for the certificates
-    #[arg(long, short, default_value = "./certs", env = "CERT_BASE_DIR")]
-    pub base_dir: Option<PathBuf>,
-
     /// A comma separated list of service names
-    #[arg(long, short)]
+    #[arg(long, short, global = true)]
     pub services: Option<String>,
 
-    #[arg(long, short, default_value_t = false)]
-    pub generate_ca: bool,
-
-    #[arg(long, short)]
+    /// Use existing CA file (path)
+    #[arg(long, short = 'C', global = true)]
     pub ca_file: Option<PathBuf>,
 
     /// The config file
@@ -73,13 +73,19 @@ pub enum Commands {
     Generate(generate::GenerateCommand),
 }
 
+impl Default for Commands {
+    fn default() -> Self {
+        Commands::Generate(generate::GenerateCommand::default())
+    }
+}
+
 #[instrument]
 pub async fn run() -> RCSSLResult<()> {
     color_eyre::install()?;
     let cli: Cli = Cli::parse();
     let log_level = cli.log_level.clone();
     let log_config = LogConfig {
-        max_level: log_level.clone(),
+        max_level: log_level.to_string(),
         filter: format!("{}={}", NAME, &log_level),
         rolling_file_path: None,
     };
@@ -92,11 +98,6 @@ pub async fn run() -> RCSSLResult<()> {
     if cli.output_dir.is_some() {
         let output_dir = cli.output_dir.unwrap();
         std::fs::create_dir_all(output_dir)?;
-    }
-
-    if cli.base_dir.is_some() {
-        let base_dir = cli.base_dir.unwrap();
-        std::fs::create_dir_all(base_dir)?;
     }
 
     let mut config = parse_config(config_file.clone())?;

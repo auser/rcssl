@@ -48,13 +48,14 @@ impl From<&str> for CertificateProfile {
             "client" => CertificateProfile::Client,
             "peer" => CertificateProfile::Peer,
             "ca" => CertificateProfile::Ca,
-            _ => panic!("Unknown profile: {}", s),
+            _ => CertificateProfile::Invalid,
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
+    #[serde(rename = "config")]
     pub ca_config: CertificateConfig,
     pub services: Vec<ServiceConfig>,
     #[serde(skip)]

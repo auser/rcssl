@@ -1,5 +1,5 @@
 {
-  "ca_config": {
+  "config": {
     "common_name": "Root CA",
     "domain": "ca.local",
     "country": "US",

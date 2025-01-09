@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use clap::Args;
 use tracing::debug;
@@ -23,7 +23,7 @@ pub enum Format {
     Json,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct GenerateCommand {
     /// Generate CA certificate along with the services
     #[arg(short, long)]
@@ -53,23 +53,34 @@ pub async fn run(cli: &Cli, gen_command: &GenerateCommand, config: &Config) -> R
     let mut generator = CertificateGenerator::new();
     let ca = if gen_command.ca {
         let base_dir = cli
-            .base_dir
+            .output_dir
             .clone()
             .unwrap_or_else(|| PathBuf::from("./certs"));
-        generator.generate_ca(&base_dir, &ca_options)?
+        if !base_dir.exists() {
+            generator.ensure_directory_exists(&base_dir)?;
+        }
+        let ca = generator.generate_ca(&base_dir, &ca_options)?;
+        debug!("Generated CA");
+        let write_result = ca.write(&base_dir.to_string_lossy())?;
+        debug!("Write result: {:?}", write_result);
+        ca
     } else if let Some(ca_file) = cli.ca_file.clone() {
+        debug!("Using CA file: {:?}", ca_file);
         CertificateKeyPair::try_from(PathBuf::from(ca_file))?
     } else {
         return Err(RCSSLError::InvalidCA);
     };
 
-    let mut config = config.clone();
-    config.ca = Some(ca);
+    debug!("Using CA: {:?}", ca);
+
+    let config = config.clone();
+    // config.ca = Some(ca);
+    generator.set_ca(ca);
 
     if gen_command.reset {
         debug!("Cleaning up certificates");
         let base_dir = cli
-            .base_dir
+            .output_dir
             .clone()
             .unwrap_or_else(|| PathBuf::from("./certs"));
         generator.clean_certs(&base_dir)?;
@@ -99,10 +110,16 @@ pub async fn run(cli: &Cli, gen_command: &GenerateCommand, config: &Config) -> R
         .collect();
 
     let base_dir = cli
-        .base_dir
+        .output_dir
         .clone()
         .unwrap_or_else(|| PathBuf::from("./certs"));
-    generator.generate_service_certs(&base_dir, service_options)?;
+    let service_certs = generator.generate_service_certs(&base_dir, service_options)?;
+    debug!("Generated service certificates: {:?}", service_certs.len());
+    service_certs.iter().for_each(|cert| {
+        debug!("Service certificate: {:?}", cert.name());
+        let output_dir = base_dir.join(&cert.name());
+        cert.write(&output_dir.to_string_lossy()).ok();
+    });
     Ok(())
 }
 
@@ -122,11 +139,17 @@ fn build_service_configuration_options(
 
     let service_name = service.name.clone();
 
-    let mut hosts = service
+    let hosts: HashSet<String> = service
         .hosts
         .as_ref()
         .map(|h| h.iter().map(|s| s.to_string()).collect())
-        .unwrap_or_else(|| vec!["localhost".to_string()]);
+        .unwrap_or_else(|| vec!["localhost".to_string()])
+        .into_iter()
+        .collect();
+
+    let mut hosts: Vec<String> = hosts.into_iter().collect();
+    hosts.sort();
+    let mut hosts: HashSet<String> = hosts.into_iter().collect();
 
     let ca_hosts = ca_options.hosts.clone();
     hosts.extend(ca_hosts);
@@ -140,9 +163,11 @@ fn build_service_configuration_options(
     let output_dir = output_dir.join(&service_name);
 
     let base_dir = cli
-        .base_dir
+        .output_dir
         .clone()
         .unwrap_or_else(|| PathBuf::from("./certs"));
+
+    println!("parsed_profile: {:?}", parsed_profile);
 
     builder = builder
         .profile(parsed_profile)
@@ -184,5 +209,121 @@ fn build_ca_configuration_options(config: &Config) -> CertificateOptions {
         is_ca: true,
         algorithm: config.ca_config.algorithm.clone(),
         ca: config.ca.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::cli::config::CertificateConfig;
+
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_build_ca_configuration_options() {
+        let config = Config {
+            ca_config: CertificateConfig {
+                domain: "test.local".to_string(),
+                profile: CertificateProfile::Ca,
+                common_name: "Test CA".to_string(),
+                hosts: vec!["localhost".to_string(), "ca.local".to_string()],
+                city: "Test City".to_string(),
+                state: "Test State".to_string(),
+                country: "Test Country".to_string(),
+                organization: "Test Org".to_string(),
+                organizational_unit: Some("Test Unit".to_string()),
+                validity_days: 365,
+                algorithm: "ed25519".to_string(),
+            },
+            ca: None,
+            services: vec![],
+        };
+
+        let options = build_ca_configuration_options(&config);
+
+        assert_eq!(options.profile, CertificateProfile::Ca);
+        assert_eq!(options.common_name, Some("Test CA".to_string()));
+        assert_eq!(options.name, "ca");
+        assert_eq!(options.hosts, vec!["localhost", "ca.local"]);
+        assert_eq!(options.domain, "local");
+        assert_eq!(options.city, "Test City");
+        assert_eq!(options.state, "Test State");
+        assert_eq!(options.country, "Test Country");
+        assert_eq!(options.organization, "Test Org");
+        assert_eq!(options.organizational_unit, Some("Test Unit".to_string()));
+        assert_eq!(options.validity_days, 365);
+        assert!(options.is_ca);
+        assert_eq!(options.algorithm, "ed25519");
+        assert!(options.ca.is_none());
+    }
+
+    #[test]
+    fn test_build_service_configuration_options() {
+        let cli = Cli {
+            output_dir: Some(PathBuf::from("./test-certs")),
+            ..Default::default()
+        };
+
+        let mut ca_options = CertificateOptions {
+            domain: "test.local".to_string(),
+            city: "Test City".to_string(),
+            state: "Test State".to_string(),
+            country: "Test Country".to_string(),
+            organization: "Test Org".to_string(),
+            organizational_unit: Some("Test Unit".to_string()),
+            validity_days: 365,
+            ..Default::default()
+        };
+
+        let mut generator = CertificateGenerator::new();
+        let ca = generator.generate_ca(&PathBuf::from("./test-certs"), &ca_options);
+        let ca = ca.unwrap();
+        ca_options.ca = Some(ca);
+        let service = ServiceConfig {
+            name: "test-service".to_string(),
+            profile: "server".to_string(),
+            common_name: Some("test.service.local".to_string()),
+            hosts: Some(vec![
+                "localhost".to_string(),
+                "test.service.local".to_string(),
+            ]),
+        };
+
+        let result = build_service_configuration_options(&cli, &ca_options, &service);
+        assert!(result.is_ok());
+
+        let options = result.unwrap();
+        assert_eq!(options.profile, CertificateProfile::Server);
+        assert_eq!(options.name, "test-service");
+        assert_eq!(options.common_name, Some("test.service.local".to_string()));
+        assert!(options.hosts.contains(&"localhost".to_string()));
+        assert!(options.hosts.contains(&"test.service.local".to_string()));
+        assert_eq!(options.domain, "test.local");
+        assert_eq!(options.city, "Test City");
+        assert_eq!(options.state, "Test State");
+        assert_eq!(options.country, "Test Country");
+        assert_eq!(options.organization, "Test Org");
+        assert_eq!(options.organizational_unit, Some("Test Unit".to_string()));
+        assert_eq!(options.validity_days, 365);
+        assert!(!options.is_ca);
+    }
+
+    #[test]
+    fn test_build_service_configuration_options_invalid_profile() {
+        let cli = Cli {
+            output_dir: Some(PathBuf::from("./test-certs")),
+            ..Default::default()
+        };
+        let ca_options = CertificateOptions::default();
+        let service = ServiceConfig {
+            name: "test".to_string(),
+            profile: "invalid".to_string(),
+            common_name: None,
+            hosts: None,
+        };
+
+        let result = build_service_configuration_options(&cli, &ca_options, &service);
+        assert!(result.is_err());
     }
 }

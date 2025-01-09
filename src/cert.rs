@@ -41,6 +41,7 @@ pub enum CertificateProfile {
     Client,
     Peer,
     Ca,
+    Invalid,
 }
 
 impl Default for CertificateOptions {
@@ -197,12 +198,16 @@ impl CertificateGenerator {
         Self { ca: None }
     }
 
-    fn set_ca(&mut self, ca: CertificateKeyPair) {
+    pub fn set_ca(&mut self, ca: CertificateKeyPair) {
         self.ca = Some(ca);
     }
 
     pub fn ensure_directory_exists(&self, path: &PathBuf) -> CertGenResult<()> {
-        fs::create_dir_all(path)?;
+        debug!("Ensuring directory exists: {:?}", path);
+        if !path.exists() {
+            debug!("Directory does not exist, creating: {:?}", path);
+            fs::create_dir_all(path)?;
+        }
         Ok(())
     }
 
@@ -332,6 +337,9 @@ impl CertificateGenerator {
                 params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
                 params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
             }
+            CertificateProfile::Invalid => {
+                return Err(CertGenError::GenerationError("Invalid profile".into()));
+            }
         }
 
         Ok(params)
@@ -345,12 +353,14 @@ impl CertificateGenerator {
         debug!("Generating certificate for {:?}", options.name);
         self.ensure_directory_exists(base_dir)?;
 
+        debug!("CA: {:?}", self.ca);
         let ca = self
             .ca
             .as_ref()
             .ok_or_else(|| CertGenError::GenerationError("CA certificate not found".into()))?;
 
         // Parse CA certificate and key
+        debug!("Parsing CA certificate and key");
         let ca_cert_pem = ca.certificate().pem();
         let ca_key_pem = ca.key_pair().serialize_pem();
         let ca_params = CertificateParams::from_ca_cert_pem(&ca_cert_pem)?;
@@ -358,11 +368,14 @@ impl CertificateGenerator {
         let _ca_cert = ca_params.self_signed(&ca_key_pair)?;
 
         // Generate new key pair for service certificate
+        debug!("Algorithm: {:?}", options.algorithm);
         let algorithm = get_algorithm(&options.algorithm);
         let service_key_pair = KeyPair::generate_for(algorithm)?;
 
         // Generate service certificate parameters
+        debug!("Creating service certificate parameters");
         let service_params = self.create_cert_params(options)?;
+        debug!("Self-signing service certificate");
         let service_cert = service_params.self_signed(&service_key_pair)?;
 
         let cert_kp = CertificateKeyPair::new(options.name.clone(), service_cert, service_key_pair);
@@ -430,6 +443,9 @@ impl CertificateGenerator {
                 options.name = format!("{}-ca", name);
                 let ca_cert_kp = self.generate_ca(base_dir, &options)?;
                 ca_cert_kp
+            }
+            CertificateProfile::Invalid => {
+                return Err(CertGenError::GenerationError("Invalid profile".into()));
             }
         };
 

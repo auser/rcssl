@@ -95,13 +95,18 @@ impl TryFrom<PathBuf> for CertificateKeyPair {
         let ca_cert_path = path.with_extension("pem");
         let ca_cert_pem =
             fs::read_to_string(&ca_cert_path).map_err(|e| CertGenError::IoError(e))?;
-        let ca_cert_params = CertificateParams::from_ca_cert_pem(ca_cert_pem.as_str())
-            .map_err(|e| CertGenError::InvalidCAError(e.to_string()))?;
+        let ca_cert_params =
+            CertificateParams::from_ca_cert_pem(ca_cert_pem.as_str()).map_err(|e| {
+                CertGenError::InvalidCAError(format!("Cannot open CA certificate: {:?}", e))
+            })?;
 
         // rcgen doesn't offer a way of loading the CA, so we create a fake temporary certificate.
-        let ca_cert = ca_cert_params
-            .self_signed(&ca_key)
-            .map_err(|e| CertGenError::InvalidCAError(e.to_string()))?;
+        let ca_cert = ca_cert_params.self_signed(&ca_key).map_err(|e| {
+            CertGenError::InvalidCAError(format!(
+                "Cannot create self-signed CA certificate: {:?}",
+                e
+            ))
+        })?;
 
         Ok(CertificateKeyPair::new(name, ca_cert, ca_key))
     }
