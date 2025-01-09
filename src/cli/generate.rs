@@ -1,9 +1,14 @@
 use std::path::PathBuf;
 
 use clap::Args;
+use tracing::debug;
 
-use crate::cert::{
-    CertificateGenerator, CertificateOptions, CertificateOptionsBuilder, CertificateProfile,
+use crate::{
+    cert::{
+        CertificateGenerator, CertificateOptions, CertificateOptionsBuilder, CertificateProfile,
+    },
+    cert_kp::CertificateKeyPair,
+    cli::error::RCSSLError,
 };
 
 use super::{
@@ -44,16 +49,30 @@ impl GenerateCommand {
 }
 
 pub async fn run(cli: &Cli, gen_command: &GenerateCommand, config: &Config) -> RCSSLResult<()> {
-    let ca_options = build_ca_configuration_options(cli, config);
-    let mut generator = CertificateGenerator::new(ca_options.clone());
-    if gen_command.ca {
-        generator.generate_ca()?;
-    }
+    let ca_options = build_ca_configuration_options(config);
+    let mut generator = CertificateGenerator::new();
+    let ca = if gen_command.ca {
+        let base_dir = cli
+            .base_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("./certs"));
+        generator.generate_ca(&base_dir, &ca_options)?
+    } else if let Some(ca_file) = cli.ca_file.clone() {
+        CertificateKeyPair::try_from(PathBuf::from(ca_file))?
+    } else {
+        return Err(RCSSLError::InvalidCA);
+    };
 
-    let config = config.clone();
+    let mut config = config.clone();
+    config.ca = Some(ca);
 
     if gen_command.reset {
-        generator.clean_certs()?;
+        debug!("Cleaning up certificates");
+        let base_dir = cli
+            .base_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("./certs"));
+        generator.clean_certs(&base_dir)?;
     }
 
     let services_to_generate = match gen_command.get_services() {
@@ -68,13 +87,22 @@ pub async fn run(cli: &Cli, gen_command: &GenerateCommand, config: &Config) -> R
         None => config.services,
     };
 
+    debug!(
+        "Generating certificates for services: {:?}",
+        services_to_generate
+    );
+
     let service_options: Vec<CertificateOptions> = services_to_generate
         .iter()
         .map(|service| build_service_configuration_options(cli, &ca_options, service))
         .filter_map(|result| result.ok())
         .collect();
 
-    generator.generate_service_certs(service_options)?;
+    let base_dir = cli
+        .base_dir
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("./certs"));
+    generator.generate_service_certs(&base_dir, service_options)?;
     Ok(())
 }
 
@@ -85,6 +113,12 @@ fn build_service_configuration_options(
 ) -> RCSSLResult<CertificateOptions> {
     let mut builder = CertificateOptionsBuilder::default();
     let parsed_profile: CertificateProfile = service.profile.clone().into();
+
+    if let Some(ca) = ca_options.ca.clone() {
+        builder = builder.ca(ca);
+    } else {
+        return Err(RCSSLError::InvalidCA);
+    }
 
     let service_name = service.name.clone();
 
@@ -134,28 +168,21 @@ fn build_service_configuration_options(
     Ok(builder.build())
 }
 
-fn build_ca_configuration_options(cli: &Cli, config: &Config) -> CertificateOptions {
+fn build_ca_configuration_options(config: &Config) -> CertificateOptions {
     CertificateOptions {
         profile: CertificateProfile::Ca,
-        common_name: Some(config.ca.common_name.clone()),
+        common_name: Some(config.ca_config.common_name.clone()),
         name: "ca".to_string(),
-        hosts: config.ca.hosts.clone(),
-        output_dir: cli
-            .output_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("./certs")),
-        base_dir: cli
-            .base_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("./certs")),
+        hosts: config.ca_config.hosts.clone(),
         domain: "local".to_string(),
-        city: config.ca.city.clone(),
-        state: config.ca.state.clone(),
-        country: config.ca.country.clone(),
-        organization: config.ca.organization.clone(),
-        organizational_unit: config.ca.organizational_unit.clone(),
-        validity_days: config.ca.validity_days,
+        city: config.ca_config.city.clone(),
+        state: config.ca_config.state.clone(),
+        country: config.ca_config.country.clone(),
+        organization: config.ca_config.organization.clone(),
+        organizational_unit: config.ca_config.organizational_unit.clone(),
+        validity_days: config.ca_config.validity_days,
         is_ca: true,
-        algorithm: config.ca.algorithm.clone(),
+        algorithm: config.ca_config.algorithm.clone(),
+        ca: config.ca.clone(),
     }
 }

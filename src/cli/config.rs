@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cert::CertificateProfile;
+use crate::{cert::CertificateProfile, cert_kp::CertificateKeyPair};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct CertificateConfig {
@@ -55,8 +55,10 @@ impl From<&str> for CertificateProfile {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub ca: CertificateConfig,
+    pub ca_config: CertificateConfig,
     pub services: Vec<ServiceConfig>,
+    #[serde(skip)]
+    pub ca: Option<CertificateKeyPair>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

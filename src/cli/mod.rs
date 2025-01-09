@@ -21,6 +21,8 @@ mod tracing;
 
 use tracing::init_tracing;
 
+use crate::cert_kp::CertificateKeyPair;
+
 #[derive(Debug, Parser, Clone)]
 #[command(author = AUTHOR, about = ABOUT, long_about = None, name = NAME)]
 #[command(version = &**VERSION)]
@@ -47,6 +49,9 @@ pub struct Cli {
 
     #[arg(long, short, default_value_t = false)]
     pub generate_ca: bool,
+
+    #[arg(long, short)]
+    pub ca_file: Option<PathBuf>,
 
     /// The config file
     #[arg(
@@ -94,7 +99,11 @@ pub async fn run() -> RCSSLResult<()> {
         std::fs::create_dir_all(base_dir)?;
     }
 
-    let config = parse_config(config_file.clone())?;
+    let mut config = parse_config(config_file.clone())?;
+    if let Some(ca_file) = cli.ca_file.clone() {
+        let ca_kp = CertificateKeyPair::try_from(ca_file)?;
+        config.ca = Some(ca_kp);
+    }
 
     match cli.command {
         Commands::Generate(gen_command) => {

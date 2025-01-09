@@ -20,6 +20,8 @@ pub enum RCSSLError {
     UnknownProfile(String),
     #[error("Runtime error: {0}")]
     RuntimeError(#[from] color_eyre::Report),
+    #[error("Invalid CA")]
+    InvalidCA,
 }
 
 impl From<serde_json::Error> for RCSSLError {

@@ -1,4 +1,4 @@
-ca:
+ca_config:
   domain: ari.io
   common_name: "ari.io"
   country: "US"

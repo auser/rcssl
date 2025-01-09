@@ -1,4 +1,5 @@
 pub mod cert;
+pub mod cert_kp;
 pub mod error;
 pub mod util;
 
